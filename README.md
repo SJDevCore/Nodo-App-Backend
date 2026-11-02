@@ -74,11 +74,15 @@ src/
   app.module.ts              → módulo raíz: config, conexión a MongoDB y módulos
   config/
     env.validation.ts        → esquema Joi de las variables de entorno
+  common/
+    guards/jwt-auth.guard.ts → protege rutas: verifica el token JWT
+    interfaces/              → tipos compartidos (payload del JWT, petición autenticada)
   modules/
     health/                  → health check (estado del servidor y de MongoDB)
     users/
       schemas/user.schema.ts → esquema del usuario
       users.service.ts       → acceso a datos de usuarios
+      users.controller.ts    → rutas /users (perfil del usuario autenticado)
     auth/
       dto/register.dto.ts    → validación del registro
       dto/login.dto.ts       → validación del login
@@ -92,11 +96,15 @@ docs/
 
 Base: `http://localhost:3000/api/v1`
 
-| Método | Ruta             | Descripción                                                                                                   |
-| ------ | ---------------- | ------------------------------------------------------------------------------------------------------------- |
-| GET    | `/health`        | Estado del servidor y de MongoDB. 200 si todo está bien, 503 si la base no responde                           |
-| POST   | `/auth/register` | Registra un usuario. 201 creado · 400 datos inválidos · 409 correo repetido                                   |
-| POST   | `/auth/login`    | Inicia sesión. 200 con `accessToken` y datos del usuario · 400 datos inválidos · 401 credenciales incorrectas |
+| Método | Ruta             | Auth | Descripción                                                                             |
+| ------ | ---------------- | ---- | --------------------------------------------------------------------------------------- |
+| GET    | `/health`        | —    | Estado del servidor y de MongoDB. 200 si todo está bien, 503 si la base no responde     |
+| POST   | `/auth/register` | —    | Registra un usuario. 201 creado · 400 datos inválidos · 409 correo repetido             |
+| POST   | `/auth/login`    | —    | Inicia sesión. 200 con `accessToken` y datos del usuario · 401 credenciales incorrectas |
+| GET    | `/users/me`      | JWT  | Perfil del usuario autenticado. 200 · 401 sin token o inválido · 404 usuario borrado    |
+
+Las rutas con **JWT** requieren la cabecera `Authorization: Bearer <accessToken>`.
+En Swagger, usa el botón **Authorize** y pega solo el token.
 
 ## Documentación
 

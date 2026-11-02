@@ -16,7 +16,8 @@ import { ConfigService } from '@nestjs/config';
           expiresIn:
             config.getOrThrow<JwtSignOptions['expiresIn']>('JWT_EXPIRES_IN'),
         },
-      }), 
+      }),
+      global: true /*Global en toda la app JWT */,
     }),
   ],
   controllers: [AuthController],

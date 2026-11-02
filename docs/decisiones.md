@@ -195,3 +195,39 @@ Cada entrada explica qué se decidió, por qué y qué alternativas se descartar
 - **Por qué es peligroso:** no genera ningún error; el código compila y parece funcionar.
 - **Cómo se detecta:** la prueba "contraseña incorrecta → 401" es obligatoria en cada cambio
   del login.
+
+## 021 — JwtModule global
+
+- **Decisión:** `JwtModule.registerAsync` con `global: true`.
+- **Por qué:** el guard necesita `JwtService` en cualquier módulo. Importar `AuthModule` desde
+  `UsersModule` crearía una dependencia circular (`AuthModule` ya importa `UsersModule`).
+  Al hacerlo global, `JwtService` está disponible en toda la app, igual que `ConfigService`.
+
+## 022 — Guard propio para rutas protegidas
+
+- **Decisión:** `JwtAuthGuard` (en `src/common/guards/`) lee `Authorization: Bearer <token>`,
+  verifica firma y expiración con `verifyAsync` y deja el payload en `request.user`.
+- **Por qué un guard propio y no Passport:** son pocas líneas, se entiende todo lo que hace
+  y no agrega dependencias. Passport tiene sentido con varias estrategias (Google, Facebook…).
+- **Mensajes distintos:** "Debes iniciar sesión" (sin token) y "Sesión inválida o expirada"
+  (token inválido o vencido). A diferencia del login, no hay datos que proteger y al frontend
+  le sirve distinguir los casos.
+- **Verificado:** sin token → 401; token con una letra cambiada → 401 (la firma no coincide);
+  token expirado (prueba con `JWT_EXPIRES_IN=30s`) → 401.
+
+## 023 — Tipado de la petición autenticada
+
+- **Decisión:** interfaces `JwtPayload` y `AuthenticatedRequest` (que extiende `Request` de
+  Express con `user`), en `src/common/interfaces/`.
+- **Por qué:** la regla `noImplicitAny` impide agregar `user` a una petición sin tipo. En vez de
+  desactivar la regla, se tipa lo que el guard agrega; así el editor conoce `request.user.sub`.
+- **`import type`:** como son interfaces (no existen al ejecutar) y se usan en métodos con
+  decoradores, se importan con `import type` cuando están activos `isolatedModules` y
+  `emitDecoratorMetadata`.
+
+## 024 — `/users/me` consulta la base aunque el token sea válido
+
+- **Decisión:** el endpoint busca el usuario por el `sub` del token y responde 404 si no existe.
+- **Por qué:** un JWT solo garantiza que el servidor lo emitió y que nadie lo modificó.
+  No garantiza que el usuario siga existiendo: si se borra, su token sigue siendo válido
+  hasta que expire.
