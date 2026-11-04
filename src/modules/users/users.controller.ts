@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  NotFoundException,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, NotFoundException, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiNotFoundResponse,
@@ -12,8 +6,9 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import type { AuthenticatedRequest } from '../../common/interfaces/authenticated-request.interface';
+import type { JwtPayload } from '../../common/interfaces/authenticated-request.interface';
 import { UsersService } from './users.service';
 
 /**
@@ -43,14 +38,14 @@ export class UsersController {
     description: 'Sin token, o token inválido o expirado',
   })
   @ApiNotFoundResponse({ description: 'El usuario del token ya no existe' })
-  async me(@Req() req: AuthenticatedRequest) {
-    // El guard ya verificó el token: aquí sub siempre existe
-    const user = await this.usersService.findById(req.user.sub);
+  async me(@CurrentUser() user: JwtPayload) {
+    // El guard ya verificó el token: aquí user.sub siempre existe
+    const found = await this.usersService.findById(user.sub);
 
-    if (!user) {
+    if (!found) {
       throw new NotFoundException('Usuario no encontrado');
     }
 
-    return user;
+    return found;
   }
 }
