@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nodo — Demo de ubicación en tiempo real (3 usuarios)</title>
+    <!--
+      Cliente de prueba para el backend Nodo (Socket.IO + REST).
+
+      QUÉ HACE
+      - Muestra 3 paneles, cada uno simula un usuario independiente (login propio,
+        su token JWT y su propia conexión de socket).
+      - Permite: registrarse/login, crear sala o unirse con código, conectar el
+        socket (join-room) y enviar la ubicación (location-update) de forma manual
+        o simulando movimiento. Cada panel muestra en vivo los location-update que
+        recibe de los OTROS usuarios de la misma sala.
+
+      CÓMO USARLO
+      1. Levanta el backend:   pnpm start:dev   (queda en http://localhost:3000)
+         y asegúrate de tener MongoDB conectado (MONGO_URI en .env).
+      2. Abre este archivo en el navegador (doble clic). NO necesita servidor propio.
+         La librería socket.io-client va incluida en vendor/, así que funciona OFFLINE
+         (no depende de internet ni de un CDN).
+      3. Flujo sugerido para la demo:
+         - Panel 1: registra/loguea un usuario, pulsa "Crear sala" y copia el código.
+         - Paneles 2 y 3: registra/loguea otros usuarios y pégales el código en
+           "Unirse a sala".
+         - En los 3 paneles pulsa "Conectar socket" (hace join-room automáticamente).
+         - En cualquier panel usa "Enviar ubicación" (manual) o "Simular movimiento";
+           verás los puntos aparecer en el log de los otros paneles en tiempo real.
+
+      NOTA: para probar desde un móvil en la misma red, cambia la URL del backend
+      por la IP de tu máquina (ej. http://192.168.1.20:3000). El CORS está abierto.
+    -->
+    <!-- socket.io-client incluido localmente (vendor/) para funcionar sin internet -->
+    <script src="./vendor/socket.io.min.js"></script>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #1e293b;
+        --panel2: #273449;
+        --text: #e2e8f0;
+        --muted: #94a3b8;
+        --accent: #38bdf8;
+        --ok: #4ade80;
+        --err: #f87171;
+        --border: #334155;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        padding: 16px;
+      }
+      header {
+        margin-bottom: 12px;
+      }
+      header h1 { font-size: 18px; margin: 0 0 4px; }
+      header p { margin: 0; color: var(--muted); font-size: 13px; }
+      .backend-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 10px 0 16px;
+        flex-wrap: wrap;
+      }
+      .backend-bar label { font-size: 13px; color: var(--muted); }
+      .backend-bar input { width: 280px; }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+      }
+      @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .panel h2 {
+        font-size: 15px;
+        margin: 0 0 2px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .status {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #475569;
+        color: #fff;
+      }
+      .status.on { background: var(--ok); color: #052e16; }
+      .status.off { background: #475569; }
+      .status.err { background: var(--err); color: #450a0a; }
+      fieldset {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px;
+        margin: 0;
+      }
+      legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
+      input, button {
+        font-family: inherit;
+        font-size: 13px;
+      }
+      input {
+        background: var(--panel2);
+        border: 1px solid var(--border);
+        color: var(--text);
+        border-radius: 6px;
+        padding: 6px 8px;
+        width: 100%;
+      }
+      .row { display: flex; gap: 6px; }
+      .row > * { flex: 1; min-width: 0; }
+      button {
+        background: var(--accent);
+        color: #042c3a;
+        border: none;
+        border-radius: 6px;
+        padding: 7px 10px;
+        cursor: pointer;
+        font-weight: 600;
+      }
+      button.secondary { background: #475569; color: #fff; }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .mini { font-size: 11px; color: var(--muted); word-break: break-all; }
+      .log {
+        background: #0b1220;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px;
+        height: 220px;
+        overflow-y: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        line-height: 1.5;
+      }
+      .log .line { white-space: pre-wrap; }
+      .log .in { color: var(--ok); }
+      .log .out { color: var(--accent); }
+      .log .sys { color: var(--muted); }
+      .log .bad { color: var(--err); }
+      .stack { display: flex; flex-direction: column; gap: 6px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Nodo — Demo de ubicación en tiempo real</h1>
+      <p>
+        3 usuarios en una misma sala. Cada panel es independiente. Envía ubicación
+        (manual o simulada) y obsérvala llegar a los otros paneles en tiempo real.
+      </p>
+      <div class="backend-bar">
+        <label for="backend">Backend:</label>
+        <input id="backend" value="http://localhost:3000" />
+        <span class="mini">Las rutas REST cuelgan de /api/v1; el socket se conecta a la raíz.</span>
+      </div>
+    </header>
+
+    <div class="grid" id="grid"></div>
+
+    <script>
+      // Devuelve la URL base del backend que el usuario escribió (sin barra final).
+      function backendUrl() {
+        return document.getElementById('backend').value.trim().replace(/\/$/, '');
+      }
+
+      // Construye el panel de un usuario. index 0..2
+      function buildPanel(index) {
+        const n = index + 1;
+        const tpl = document.createElement('div');
+        tpl.className = 'panel';
+        tpl.innerHTML = `
+          <h2>Usuario ${n} <span class="status off" data-status>desconectado</span></h2>
+
+          <fieldset>
+            <legend>1. Cuenta</legend>
+            <div class="stack">
+              <input data-name placeholder="Nombre (solo para registro)" value="Usuario ${n}" />
+              <input data-email placeholder="email" value="user${n}@demo.com" />
+              <input data-pass placeholder="password" value="secreto123" />
+              <div class="row">
+                <button data-register class="secondary">Registrar</button>
+                <button data-login>Login</button>
+              </div>
+              <div class="mini" data-token>sin token</div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>2. Sala</legend>
+            <div class="stack">
+              <div class="row">
+                <input data-roomname placeholder="Nombre de sala" value="Demo" />
+                <button data-create class="secondary">Crear sala</button>
+              </div>
+              <div class="row">
+                <input data-code placeholder="Código de sala" />
+                <button data-join class="secondary">Unirse</button>
+              </div>
+              <div class="mini" data-roominfo>sin sala</div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>3. Tiempo real</legend>
+            <div class="stack">
+              <div class="row">
+                <button data-connect>Conectar socket</button>
+                <button data-disconnect class="secondary" disabled>Desconectar</button>
+              </div>
+              <div class="row">
+                <input data-lat placeholder="lat" value="${(4.60971 + index * 0.001).toFixed(5)}" />
+                <input data-lng placeholder="lng" value="${(-74.08175 + index * 0.001).toFixed(5)}" />
+              </div>
+              <div class="row">
+                <button data-send>Enviar ubicación</button>
+                <button data-sim class="secondary">Simular movimiento</button>
+              </div>
+            </div>
+          </fieldset>
+
+          <div class="log" data-log></div>
+        `;
+        return tpl;
+      }
+
+      // Estado por panel.
+      function createUser(index, panelEl) {
+        const $ = (sel) => panelEl.querySelector(sel);
+        const state = {
+          token: null,
+          userId: null,
+          roomId: null,
+          socket: null,
+          simTimer: null,
+        };
+
+        const statusEl = $('[data-status]');
+        const logEl = $('[data-log]');
+
+        function setStatus(text, cls) {
+          statusEl.textContent = text;
+          statusEl.className = 'status ' + cls;
+        }
+
+        function log(msg, cls = 'sys') {
+          const time = new Date().toLocaleTimeString();
+          const line = document.createElement('div');
+          line.className = 'line ' + cls;
+          line.textContent = `[${time}] ${msg}`;
+          logEl.appendChild(line);
+          logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        // ---- REST helpers ----
+        async function api(path, method, body, auth) {
+          const headers = { 'Content-Type': 'application/json' };
+          if (auth && state.token) headers['Authorization'] = 'Bearer ' + state.token;
+          const res = await fetch(backendUrl() + '/api/v1' + path, {
+            method,
+            headers,
+            body: body ? JSON.stringify(body) : undefined,
+          });
+          let data = null;
+          try { data = await res.json(); } catch (_) {}
+          if (!res.ok) {
+            const message = (data && (data.message || data.error)) || res.statusText;
+            throw new Error(Array.isArray(message) ? message.join(', ') : message);
+          }
+          return data;
+        }
+
+        // ---- Acciones ----
+        $('[data-register]').onclick = async () => {
+          try {
+            await api('/auth/register', 'POST', {
+              name: $('[data-name]').value,
+              email: $('[data-email]').value,
+              password: $('[data-pass]').value,
+            });
+            log('Registrado. Ahora pulsa Login.', 'sys');
+          } catch (e) {
+            log('Registro: ' + e.message, 'bad');
+          }
+        };
+
+        $('[data-login]').onclick = async () => {
+          try {
+            const data = await api('/auth/login', 'POST', {
+              email: $('[data-email]').value,
+              password: $('[data-pass]').value,
+            });
+            state.token = data.accessToken;
+            state.userId = data.user && data.user.id;
+            $('[data-token]').textContent =
+              'userId: ' + state.userId + ' · token: ' + state.token.slice(0, 18) + '…';
+            log('Login OK.', 'sys');
+          } catch (e) {
+            log('Login: ' + e.message, 'bad');
+          }
+        };
+
+        $('[data-create]').onclick = async () => {
+          try {
+            const room = await api('/rooms', 'POST', { name: $('[data-roomname]').value }, true);
+            state.roomId = room.id;
+            $('[data-code]').value = room.code;
+            $('[data-roominfo]').textContent = 'sala: ' + room.id + ' · código: ' + room.code;
+            log('Sala creada. Código ' + room.code + ' (compártelo con los otros paneles).', 'sys');
+          } catch (e) {
+            log('Crear sala: ' + e.message, 'bad');
+          }
+        };
+
+        $('[data-join]').onclick = async () => {
+          try {
+            const room = await api('/rooms/join', 'POST', { code: $('[data-code]').value.trim() }, true);
+            state.roomId = room.id;
+            $('[data-roominfo]').textContent = 'sala: ' + room.id + ' · código: ' + room.code;
+            log('Unido a la sala ' + room.code + '.', 'sys');
+          } catch (e) {
+            log('Unirse: ' + e.message, 'bad');
+          }
+        };
+
+        $('[data-connect]').onclick = () => {
+          if (!state.token) { log('Primero haz Login.', 'bad'); return; }
+          if (!state.roomId) { log('Primero crea o únete a una sala.', 'bad'); return; }
+          if (state.socket) { log('Ya hay un socket conectado.', 'sys'); return; }
+
+          // El token viaja en el handshake (auth.token), como espera WsJwtGuard.
+          const socket = io(backendUrl(), { auth: { token: state.token } });
+          state.socket = socket;
+
+          socket.on('connect', () => {
+            setStatus('conectado', 'on');
+            log('Socket conectado (' + socket.id + '). Enviando join-room…', 'sys');
+            socket.emit('join-room', { roomId: state.roomId });
+            $('[data-connect]').disabled = true;
+            $('[data-disconnect]').disabled = false;
+          });
+
+          // location-update que llega de OTROS usuarios de la sala.
+          socket.on('location-update', (p) => {
+            log(
+              `◀ location-update de ${String(p.userId).slice(-6)} → lat ${p.lat}, lng ${p.lng}` +
+                (p.battery != null ? `, bat ${p.battery}%` : '') +
+                `  (${new Date(p.updatedAt).toLocaleTimeString()})`,
+              'in',
+            );
+          });
+
+          socket.on('member-left', (p) => {
+            log('◀ member-left: ' + String(p.userId).slice(-6), 'sys');
+          });
+
+          socket.on('error', (p) => {
+            log('◀ error del servidor: ' + (p && p.message ? p.message : JSON.stringify(p)), 'bad');
+          });
+
+          socket.on('disconnect', (reason) => {
+            setStatus('desconectado', 'off');
+            log('Socket desconectado (' + reason + ').', 'sys');
+            $('[data-connect]').disabled = false;
+            $('[data-disconnect]').disabled = true;
+            stopSim();
+            state.socket = null;
+          });
+
+          socket.on('connect_error', (err) => {
+            setStatus('error', 'err');
+            log('connect_error: ' + err.message, 'bad');
+          });
+        };
+
+        $('[data-disconnect]').onclick = () => {
+          if (state.socket) {
+            state.socket.emit('leave-room', { roomId: state.roomId });
+            state.socket.disconnect();
+          }
+        };
+
+        function sendLocation(lat, lng) {
+          if (!state.socket || !state.socket.connected) {
+            log('Conecta el socket antes de enviar ubicación.', 'bad');
+            return;
+          }
+          const payload = {
+            roomId: state.roomId,
+            lat: Number(lat),
+            lng: Number(lng),
+            battery: 100,
+          };
+          state.socket.emit('location-update', payload);
+          log(`▶ location-update enviado → lat ${payload.lat}, lng ${payload.lng}`, 'out');
+        }
+
+        $('[data-send]').onclick = () => {
+          sendLocation($('[data-lat]').value, $('[data-lng]').value);
+        };
+
+        // ---- Simulador de movimiento: desplaza un poco las coords cada 2 s ----
+        function startSim() {
+          if (state.simTimer) return;
+          $('[data-sim]').textContent = 'Detener simulación';
+          log('Simulación de movimiento iniciada (cada 2 s).', 'sys');
+          state.simTimer = setInterval(() => {
+            const lat = Number($('[data-lat]').value) + (Math.random() - 0.5) * 0.0008;
+            const lng = Number($('[data-lng]').value) + (Math.random() - 0.5) * 0.0008;
+            $('[data-lat]').value = lat.toFixed(5);
+            $('[data-lng]').value = lng.toFixed(5);
+            sendLocation(lat, lng);
+          }, 2000);
+        }
+        function stopSim() {
+          if (!state.simTimer) return;
+          clearInterval(state.simTimer);
+          state.simTimer = null;
+          $('[data-sim]').textContent = 'Simular movimiento';
+          log('Simulación detenida.', 'sys');
+        }
+        $('[data-sim]').onclick = () => (state.simTimer ? stopSim() : startSim());
+      }
+
+      // Monta los 3 paneles.
+      const grid = document.getElementById('grid');
+      for (let i = 0; i < 3; i++) {
+        const el = buildPanel(i);
+        grid.appendChild(el);
+        createUser(i, el);
+      }
+    </script>
+  </body>
+</html>
