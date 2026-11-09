@@ -13,6 +13,13 @@ export type Vehicle = (typeof VEHICLES)[number];
 /** Estados de un viaje. */
 export const TRIP_STATUSES = ['active', 'ended'] as const;
 export type TripStatus = (typeof TRIP_STATUSES)[number];
+/**
+ * Caracteres del código de invitación. Sin 0, O, 1, I ni L porque se confunden
+ * al dictarlos o leerlos. 31 caracteres en 6 posiciones ≈ 887 millones de códigos.
+ * Lo usan el generador del service y la validación del JoinTripDto.
+ */
+
+export const TRIP_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 // ─────────────────────────────────────────────────────────────
 // Integrante
@@ -57,7 +64,7 @@ export class Trip {
   @Prop({ type: String, required: true, trim: true, maxlength: 60 })
   name!: string;
   /** Destino del viaje. */
-  @Prop({ type: String, trim: true, maxlength: 100 })
+  @Prop({ type: String, trim: true, maxlength: 60 })
   destination?: string;
   /** Código del viaje. */
   @Prop({
