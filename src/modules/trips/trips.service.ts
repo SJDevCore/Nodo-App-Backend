@@ -90,10 +90,13 @@ export class TripsService {
    * Sin viajes devuelve [] (200): una lista vacía es una respuesta válida.
    */
   async findHistoryByUser(userId: string): Promise<TripView[]> {
+    const userObjectId = new Types.ObjectId(userId);
+
     const trips = await this.tripModel
       .find({
-        'members.user': new Types.ObjectId(userId),
+        'members.user': userObjectId,
         status: 'ended',
+        hiddenFor: { $ne: userObjectId },
       })
       .sort({ endedAt: -1 })
       .limit(HISTORY_LIMIT)
@@ -232,6 +235,22 @@ export class TripsService {
       { status: 'ended', endedAt: new Date() },
     );
     return (await this.findOneView({ _id: tripId }))!;
+  }
+
+  async hideFromHistory(userId: string, tripId: string): Promise<void> {
+    const userObjectId = new Types.ObjectId(userId);
+
+    const result = isValidObjectId(tripId)
+      ? await this.tripModel.updateOne(
+          { _id: tripId, status: 'ended', 'members.user': userObjectId },
+          // $addToSet: si ya estaba oculto no lo duplica; repetir la petición no hace daño.
+          { $addToSet: { hiddenFor: userObjectId } },
+        )
+      : null;
+
+    if (!result || result.matchedCount === 0) {
+      throw new NotFoundException('Viaje no encontrado en tu historial');
+    }
   }
 
   // ─── Internos ───────────────────────────────────────────────

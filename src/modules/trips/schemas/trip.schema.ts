@@ -88,6 +88,8 @@ export class Trip {
   /** Fecha de finalización del viaje. */
   @Prop({ type: Date })
   endedAt?: Date;
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
+  hiddenFor!: Types.ObjectId[];
 }
 
 export const TripSchema = SchemaFactory.createForClass(Trip);

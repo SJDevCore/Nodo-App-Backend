@@ -71,4 +71,10 @@ export class TripsController {
   end(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
     return this.tripsService.end(user.sub, id);
   }
+  /** DELETE /trips/:id/history → 204. Lo quita del historial de quien lo pide, no lo borra. */
+  @Delete(':id/history')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  hideFromHistory(@CurrentUser() user: JwtPayload, @Param('id') id: string) {
+    return this.tripsService.hideFromHistory(user.sub, id);
+  }
 }
