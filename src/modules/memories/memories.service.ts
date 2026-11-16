@@ -1,3 +1,5 @@
+/// <reference types="multer" />
+
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isValidObjectId, Model, Types } from 'mongoose';
@@ -5,7 +7,6 @@ import { TripsService } from '../trips/trips.service';
 import { CloudinaryService } from './cloudinary.service';
 import { CreateMemoryDto } from './dto/create-memory.dto';
 import { Memory } from './schemas/memory.schema';
-import 'multer';
 
 const LIST_LIMIT = 200;
 

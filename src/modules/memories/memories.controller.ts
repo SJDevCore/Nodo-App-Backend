@@ -1,3 +1,5 @@
+/// <reference types="multer" />
+
 import {
   Body,
   Controller,
@@ -21,7 +23,6 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import type { JwtPayload } from '../../common/interfaces/authenticated-request.interface';
 import { CreateMemoryDto } from './dto/create-memory.dto';
 import { MemoriesService } from './memories.service';
-import 'multer';
 
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 MB
 
