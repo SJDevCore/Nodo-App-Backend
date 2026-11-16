@@ -46,6 +46,12 @@ export class TripsController {
     return this.tripsService.getActive(user.sub);
   }
 
+  /** GET /trips/history → viajes terminados del usuario. También va ANTES de ':id'. */
+  @Get('history')
+  getHistory(@CurrentUser() user: JwtPayload) {
+    return this.tripsService.findHistoryByUser(user.sub);
+  }
+
   /** GET /trips/:id → solo integrantes. */
   @Get(':id')
   getById(@CurrentUser() user: JwtPayload, @Param('id') id: string) {

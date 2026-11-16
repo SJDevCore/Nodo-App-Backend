@@ -20,6 +20,8 @@ import {
 const CODE_LENGTH = 6;
 // Con ~887 millones de códigos posibles, una colisión es rarísima; 5 intentos sobran
 const MAX_CODE_ATTEMPTS = 5;
+// El historial no necesita paginación para este alcance; un tope evita respuestas enormes
+const HISTORY_LIMIT = 30;
 
 /** Integrante tal como lo recibe el frontend (contrato acordado). */
 export interface TripMemberView {
@@ -80,6 +82,26 @@ export class TripsService {
       throw new NotFoundException('No tienes un viaje activo');
     }
     return trip;
+  }
+
+  /**
+   * GET /trips/history → viajes terminados donde participó el usuario,
+   * del más reciente al más antiguo. Usa el índice members.user + status.
+   * Sin viajes devuelve [] (200): una lista vacía es una respuesta válida.
+   */
+  async findHistoryByUser(userId: string): Promise<TripView[]> {
+    const trips = await this.tripModel
+      .find({
+        'members.user': new Types.ObjectId(userId),
+        status: 'ended',
+      })
+      .sort({ endedAt: -1 })
+      .limit(HISTORY_LIMIT)
+      .populate('members.user', 'name')
+      .lean<PopulatedTrip[]>()
+      .exec();
+
+    return trips.map((trip) => this.toView(trip));
   }
 
   /**
