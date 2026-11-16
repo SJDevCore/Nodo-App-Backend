@@ -38,4 +38,7 @@ export const envValidationSchema = Joi.object({
       'string.pattern.base':
         'JWT_EXPIRES_IN debe tener formato como 15m, 12h o 7d',
     }),
+  CLOUDINARY_CLOUD_NAME: Joi.string().required(),
+  CLOUDINARY_API_KEY: Joi.string().required(),
+  CLOUDINARY_API_SECRET: Joi.string().required(),
 });

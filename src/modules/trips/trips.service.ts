@@ -104,6 +104,16 @@ export class TripsService {
     return trips.map((trip) => this.toView(trip));
   }
 
+  /** Ids de todos los viajes (activos o terminados) donde participa el usuario. */
+  async findTripIdsByUser(userId: string): Promise<Types.ObjectId[]> {
+    const trips = await this.tripModel
+      .find({ 'members.user': new Types.ObjectId(userId) })
+      .select('_id')
+      .lean()
+      .exec();
+    return trips.map((trip) => trip._id);
+  }
+
   /**
    * GET /trips/:id → solo para integrantes.
    * Responde 404 (y no 403) si no es integrante, para no revelar que el viaje existe.

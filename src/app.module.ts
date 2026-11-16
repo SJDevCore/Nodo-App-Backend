@@ -9,6 +9,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { TripsModule } from './modules/trips/trips.module';
 import { TrackingModule } from './modules/tracking/tracking.module';
+import { MemoriesModule } from './modules/memories/memories.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { TrackingModule } from './modules/tracking/tracking.module';
 
     TripsModule,
     TrackingModule,
+    MemoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
