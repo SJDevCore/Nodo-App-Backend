@@ -2,7 +2,10 @@
   "name": "nodo-api",
   "version": "0.0.1",
   "description": "",
-  "author": "",
+  "author": "Santiago Jiménez",
+  "contributors": [
+    "Sebastián Gómez"
+  ],
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
