@@ -297,5 +297,5 @@ Las decisiones técnicas y su justificación están en [`docs/decisiones.md`](do
 
 - **Santiago Jiménez** — backend e integración.
 - **Sebastián Gómez** — interfaz de usuario.
-
-Ingeniería de Sistemas · Escuela Tecnológica Instituto Técnico Central (ETITC) · Bogotá, 2026.
+- **Hawi Acevedo** - Testing
+  Ingeniería de Sistemas · Escuela Tecnológica Instituto Técnico Central (ETITC) · Bogotá, 2026.
